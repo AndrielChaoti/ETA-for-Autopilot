@@ -1,6 +1,8 @@
 ﻿/*
  *   R e a d m e
  *   -----------
+ * Estimated Travel Time Version 0.5 by AndrielChaoti (https://github.com/AndrielChaoti/ETA-for-Autopilot)
+ *   
  * Using this script is super simple. Just make sure your ship has a Remote Control attached to it.
  * Load up this script into a new programmable block, click "Check Code", then "Remember & Exit".
  * Set up a timer block (Or use an existing timer block: this script works best when tied in with
