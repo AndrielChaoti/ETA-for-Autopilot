@@ -96,6 +96,7 @@
     <Analyzer Include="C:\Users\accou\AppData\Local\Microsoft\VisualStudio\15.0_4fb6222b\Extensions\vun0tiiq.ayk\Analyzers\MDKAnalyzer.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AutopilotETA.cs" />
     <Compile Include="MDK\Bootstrapper.cs" />
     <AdditionalFiles Include="MDK\MDK.options">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

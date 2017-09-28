@@ -30,92 +30,13 @@ namespace IngameScript {
          ***********************************************************/
         private List<IMyTextPanel> gridTextPanels;
         private List<IMyRemoteControl> gridRemoteControls;
-        private TimeSpan CurrentETA;
+
         private double dt;
 
         public Program() {
             gridTextPanels = new List<IMyTextPanel>();
             gridRemoteControls = new List<IMyRemoteControl>();
-            CurrentETA = new TimeSpan();
             dt = THROTTLE;
-        }
-
-        public bool GetETA(List<IMyRemoteControl> remoteControls, bool isComplexVector, out TimeSpan ETA) {
-            // Init:
-            Vector3D controlDestination;
-            Vector3D currentPosition;
-
-            // really there should only be one remote control :/
-            foreach(IMyRemoteControl control in remoteControls) {
-                try {
-                    currentPosition = control.GetPosition();
-                    GetControlDestinationCoordinates(control, out controlDestination);
-
-                    if(!isComplexVector) {
-                        // calculate linear ETA
-                        try {
-                            double distance = Vector3D.Distance(currentPosition, controlDestination);
-                            double shipVelocity = control.GetShipSpeed();
-
-                            ETA = TimeSpan.FromSeconds(distance / shipVelocity);
-                            return true;
-                        } catch {
-                            ETA = new TimeSpan(-1);
-                            return false;
-                        }
-                    } else {
-                        throw new Exception("Not implemented.");
-#pragma warning disable CS0162 // Unreachable code detected
-                        ETA = new TimeSpan();
-#pragma warning restore CS0162 // Unreachable code detected
-                        return true;
-                    }
-
-                } catch(Exception e) {
-                    Echo(e.Message);
-                    Echo(e.StackTrace);
-                    throw;
-                }
-            }
-            // failure case:
-            ETA = new TimeSpan();
-            return false;
-        }
-
-        public bool GetControlDestinationCoordinates(IMyRemoteControl control, out Vector3D destination) {
-            // get current waypoint from the remote control's text:
-            int start; int end;
-            string coordinates;
-
-            start = control.DetailedInfo.IndexOf("{");
-            end = control.DetailedInfo.IndexOf("}");
-
-            if(start == -1 || end == -1) {
-                destination = new Vector3D(0, 0, 0);
-                return false;
-            }
-
-            coordinates = control.DetailedInfo.Substring(start, start - end);
-            if(coordinates == "") {
-                destination = new Vector3D(0, 0, 0);
-                return false;
-            }
-
-            string[] values = coordinates.Split(' ');
-            if(values.Length != 3) {
-                destination = new Vector3D(0, 0, 0);
-                return false;
-            }
-
-
-            var coord = new double[3];
-            for(int i = 0; i < 3; i++) {
-                if(!Double.TryParse(values[i].Substring(2), out coord[i])) {
-                    throw new FormatException("Could not parse " + values[i] + " as double.");
-                }
-            }
-            destination = new Vector3D(coord[0], coord[1], coord[2]);
-            return true;
         }
 
         public void Main() {
@@ -134,31 +55,35 @@ namespace IngameScript {
                     Echo("No LCDs found to update. Check to make sure your LCDs have \"" + TAG_STR + "\"!");
                 }
 
+                AutopilotETA CurrentETA = new AutopilotETA(this);
+                CurrentETA.CalculateETA(gridRemoteControls, false);
+
+                int count = 0;
                 foreach(IMyTextPanel panel in gridTextPanels) {
                     panel.ShowPublicTextOnScreen();
 
                     if(gridRemoteControls.Count() != 0) {
-
-                        if(GetETA(gridRemoteControls, false, out CurrentETA)) {
-                            // ETA is found
-                            panel.WritePublicText(String.Format("ETA: {0:g}", CurrentETA));
-                        } else if(GetETA(gridRemoteControls, false, out CurrentETA) && CurrentETA.Ticks == -1) {
-                            // ETA is infinite
-                            panel.WritePublicText("ETA: Infinity");
+                        if(CurrentETA.IsDestinationSet && !CurrentETA.IsTimeInfinite) {
+                            panel.WritePublicText(String.Format("ETA: {0:g}", CurrentETA.EstimatedTime));
+                        } else if(CurrentETA.IsTimeInfinite) {
+                            panel.WritePublicText("ETA: Stopped");
                         } else {
-                            // No ETA found: autopilot off or no RCs.
-                            panel.WritePublicText("Autopilot off.");
+                            panel.WritePublicText("ETA: No destination found.");
                         }
                     } else {
+                        // Just double-check the user *has* a remote control on the grid:
                         GridTerminalSystem.GetBlocksOfType(gridRemoteControls);
                         if(gridRemoteControls.Count() == 0) {
-                            panel.WritePublicText("No remote controls on this ship!");
+                            panel.WritePublicText("ETA: No Remote Controls on this ship!");
                         } else {
-                            panel.WritePublicText("Autopilot is turned off.");
+                            panel.WritePublicText("ETA: Autopilot disabled.");
                         }
                     }
+                    count++;
                 }
-
+                Echo("ETA: " + CurrentETA.ETAStatus);
+                Echo(String.Format("Last run: {0:F4}ms", Runtime.LastRunTimeMs));
+                Echo("Updated " + count + " panel(s) in " + Runtime.CurrentInstructionCount + " instructions.");
             } catch {
                 GridTerminalSystem.GetBlocksOfType(gridTextPanels, textPanel => textPanel.Enabled && textPanel.CustomName.Contains(TAG_STR));
                 if(gridTextPanels.Count == 0) { throw; }
