@@ -20,35 +20,35 @@ namespace IngameScript {
 
             private MyGridProgram Program;
 
-            public bool IsDestinationSet;
-            public bool IsTimeInfinite;
-            public string ETAStatus;
-            public TimeSpan EstimatedTime;
+            public bool IsDestinationSet { get; internal set; }
+            public bool IsTimeInfinite { get; internal set; }
+            public string ETAStatus { get; internal set; }
+            public TimeSpan EstimatedTime { get; internal set; }
 
             public AutopilotETA(MyGridProgram me) {
                 Program = me;
             }
 
-            public void CalculateETA(List<IMyRemoteControl> remoteControls, bool complex) {
+            public void CalculateETA(List<IMyRemoteControl> remoteControls, bool complexSearch) {
                 // Init:
                 Vector3D controllerDestination;
                 Vector3D currentPosition;
 
                 TimeSpan calculatedTime;
 
-                foreach(IMyRemoteControl controller in remoteControls) {
+                foreach (IMyRemoteControl controller in remoteControls) {
                     try {
                         currentPosition = controller.GetPosition();
                         bool success = ParseControllerDestination(controller, out controllerDestination);
                         // could not find a destination
-                        if(!success) {
+                        if (!success) {
                             IsTimeInfinite = false;
                             IsDestinationSet = false;
                             ETAStatus = "nodestination";
                             return;
                         }
 
-                        if(complex) {
+                        if(complexSearch) {
                             // nop
                         } else {
                             // calculate basic ETA, making assumptions along the way:
@@ -57,19 +57,23 @@ namespace IngameScript {
                                 double distance = Vector3D.Distance(currentPosition, controllerDestination);
                                 double shipVelocity = controller.GetShipSpeed();
 
+                                if (shipVelocity == 0) {
+                                    IsTimeInfinite = true;
+                                    ETAStatus = "notmoving";
+                                    return;
+                                }
+
                                 calculatedTime = TimeSpan.FromSeconds(distance / shipVelocity);
                                 IsTimeInfinite = false;
                                 EstimatedTime = calculatedTime;
                                 ETAStatus = calculatedTime.ToString();
                                 return;
                             } catch {
-                                // timespan overflowed most likely, don't crash the PB:
-                                ETAStatus = "toolarge";
-                                IsTimeInfinite = true;
+                                ETAStatus = "error";
                                 return;
                             }
                         }
-                    } catch(Exception e) {
+                    } catch (Exception e) {
                         ETAStatus = "error";
                         Program.Echo(e.Message);
                         throw;
@@ -86,26 +90,26 @@ namespace IngameScript {
                 start = remoteControl.DetailedInfo.IndexOf("{");
                 end = remoteControl.DetailedInfo.IndexOf("}");
 
-                if(start == -1 || end == -1) {
+                if (start == -1 || end == -1) {
                     destination = new Vector3D();
                     return false;
                 }
 
                 rcCoordinates = remoteControl.DetailedInfo.Substring(start + 1, (end - start) - 1);
 
-                if(rcCoordinates == "") {
+                if (rcCoordinates == "") {
                     destination = new Vector3D();
                     return false;
                 }
 
                 string[] coordinateValues = rcCoordinates.Split(' ');
-                if(coordinateValues.Length != 3) {
+                if (coordinateValues.Length != 3) {
                     destination = new Vector3D();
                     return false;
                 }
                 var numericCoordinate = new double[3];
-                for(int i = 0; i < 3; i++) {
-                    if(!Double.TryParse(coordinateValues[i].Substring(2), out numericCoordinate[i])) {
+                for (int i = 0; i < 3; i++) {
+                    if (!Double.TryParse(coordinateValues[i].Substring(2), out numericCoordinate[i])) {
                         throw new FormatException("Could not parse " + coordinateValues[i].Substring(2) + " as double.");
                     }
                 }
