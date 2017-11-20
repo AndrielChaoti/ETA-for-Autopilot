@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27004.2009
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShipAutopilotETA", "ShipAutopilotETA\ShipAutopilotETA.csproj", "{17F34B4E-F002-43C3-96E1-A0BBFD437889}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{17F34B4E-F002-43C3-96E1-A0BBFD437889}.Debug|x64.ActiveCfg = Debug|x64
+		{17F34B4E-F002-43C3-96E1-A0BBFD437889}.Debug|x64.Build.0 = Debug|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {25B1BE04-F1D0-44FD-B2FA-974512726828}
+	EndGlobalSection
+EndGlobal
