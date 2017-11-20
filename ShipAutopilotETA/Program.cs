@@ -18,49 +18,163 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        // This file contains your actual script.
-        //
-        // You can either keep all your code here, or you can create separate
-        // code files to make your program easier to navigate while coding.
-        //
-        // In order to add a new utility class, right-click on your project, 
-        // select 'New' then 'Add Item...'. Now find the 'Space Engineers'
-        // category under 'Visual C# Items' on the left hand side, and select
-        // 'Utility Class' in the main area. Name it in the box below, and
-        // press OK. This utility class will be merged in with your code when
-        // deploying your final script.
-        //
-        // You can also simply create a new utility class manually, you don't
-        // have to use the template if you don't want to. Just do so the first
-        // time to see what a utility class looks like.
+        // If you need to change any settings about the program, this is where you do it.
+        // This is the tag that my program will look for on your LCDs.
+        // The default value is "[ETA]".
+        public const string TagString = "[ETA]";
+
+        // This is how long my program will wait, in seconds, until the next time it updates:
+        // The default value is 0.25f, or 1/4 of a second.
+        public const double ThrottleTime = 0.25f;
+
+        /***********************************************************
+         * DO NOT CHANGE ANYTHING BELOW THIS LINE UNLESS YOU KNOW
+         * WHAT YOU ARE DOING! YOU COULD BREAK THINGS!
+         ***********************************************************/
+        private List<IMyTextPanel> gridTextPanels;
+        private List<IMyRemoteControl> gridRemoteControls;
+
+        private double timeSinceLastRun;
+        private long ticks = 0;
+        private long lastTicks = 0;
+        private int updates = 0;
+        private bool debug = false;
 
         public Program()
         {
-            // The constructor, called only once every session and
-            // always before any other method is called. Use it to
-            // initialize your script. 
-            //     
-            // The constructor is optional and can be removed if not
-            // needed.
+            // initalize some variables.
+            gridTextPanels = new List<IMyTextPanel>();
+            gridRemoteControls = new List<IMyRemoteControl>();
+
+            // Set the timeSinceLastRun to be throttleTime so that we don't
+            // have to wait for the first run
+            timeSinceLastRun = ThrottleTime;
+            updates = 6;
+
+            Echo("ETA script compiled successfully.");
+            Runtime.UpdateFrequency = UpdateFrequency.Update1 | UpdateFrequency.Update100;
+
         }
 
-        public void Save()
+        public void UpdateGrid()
         {
-            // Called when the program needs to save its state. Use
-            // this method to save your state to the Storage field
-            // or some other means. 
-            // 
-            // This method is optional and can be removed if not
-            // needed.
+            // Rescan the grid for our blocks
+            gridTextPanels.Clear();
+            gridRemoteControls.Clear();
+
+            GridTerminalSystem.GetBlocksOfType(gridRemoteControls, remoteControl => remoteControl.IsAutoPilotEnabled);
+            GridTerminalSystem.GetBlocksOfType(gridTextPanels, textPanel => textPanel.Enabled && textPanel.CustomName.Contains(TagString));
         }
 
-        public void Main(string argument)
+        public void Main(string argument, UpdateType updateSource)
         {
-            // The main entry point of the script, invoked every time
-            // one of the programmable block's Run actions are invoked.
-            // 
-            // The method itself is required, but the argument above
-            // can be removed if not needed.
+            int count = 0;
+            // handle command arguments:
+            if ((updateSource & (UpdateType.Terminal | UpdateType.Trigger)) != 0)
+            {
+                if (argument.ToLower().Contains("debug"))
+                {
+                    debug = !debug;
+                }
+            }
+
+            try
+            {
+                if ((updateSource & UpdateType.Update100) != 0)
+                {
+                    // We will only update our local copy of the grid every 6 long cycles (roughly 10s)
+                    updates++;
+                    lastTicks = ticks;
+                    ticks = 0;
+
+                    if (updates >= 6)
+                    {
+                        UpdateGrid();
+                        updates = 0;
+                        return;
+                    }
+                }
+
+                if ((updateSource & UpdateType.Update1) != 0)
+                {
+                    ticks++;
+                    timeSinceLastRun += Runtime.TimeSinceLastRun.TotalSeconds;
+
+                    if (gridTextPanels.Count == 0)
+                    {
+                        Echo("No LCDs found to update. Check to make sure your LCDs have \"" + TagString + "\"!");
+                    }
+
+                    AutopilotETA CurrentETA = new AutopilotETA(this);
+                    CurrentETA.CalculateETA(gridRemoteControls, false);
+
+                    // throttle updating LCDs.
+                    
+                    if (timeSinceLastRun >= ThrottleTime)
+                    {
+                        timeSinceLastRun = 0;
+
+                        foreach (IMyTextPanel panel in gridTextPanels)
+                        {
+                            panel.ShowPublicTextOnScreen();
+
+                            if (gridRemoteControls.Count() != 0)
+                            {
+                                if (CurrentETA.IsDestinationSet && !CurrentETA.IsTimeInfinite)
+                                {
+                                    panel.WritePublicText(String.Format("ETA: {0:g}", CurrentETA.EstimatedTime));
+                                }
+                                else if (CurrentETA.IsTimeInfinite)
+                                {
+                                    panel.WritePublicText("ETA: Stopped");
+                                }
+                                else
+                                {
+                                    panel.WritePublicText("ETA: No destination found.");
+                                }
+                            }
+                            else
+                            {
+                                // Just double-check the user *has* a remote control on the grid:
+                                GridTerminalSystem.GetBlocksOfType(gridRemoteControls);
+                                if (gridRemoteControls.Count() == 0)
+                                {
+                                    panel.WritePublicText("ETA: No Remote Controls on this ship!");
+                                }
+                                else
+                                {
+                                    panel.WritePublicText("ETA: Autopilot disabled.");
+                                }
+                            }
+                            count++;
+                        }
+                    }
+
+                    Echo("ETA: " + CurrentETA.ETAStatus);
+                }
+            }
+            catch
+            {
+                GridTerminalSystem.GetBlocksOfType(gridTextPanels, textPanel => textPanel.Enabled && textPanel.CustomName.Contains(TagString));
+                if (gridTextPanels.Count == 0) { throw; }
+                foreach (IMyTextPanel panel in gridTextPanels)
+                {
+                    panel.ShowPublicTextOnScreen();
+                    panel.WritePublicText("A catastropic error has occured. Check the programmable block for more info.");
+                    throw;
+                }
+            }
+
+            if (debug)
+            {
+                Echo("Debug Mode ----");
+                Echo("Updated " + count + " panel(s) in " + Runtime.CurrentInstructionCount + " instructions.");
+                Echo("updateSource = " + updateSource.ToString());
+                Echo("updates = " + updates.ToString());
+                Echo("lastTicks = " + lastTicks.ToString());
+                Echo("timeSinceLastRun = " + timeSinceLastRun.ToString());
+                Echo(String.Format("Last run: {0:F4}ms", Runtime.LastRunTimeMs));
+            }
         }
     }
 }
